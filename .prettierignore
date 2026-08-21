@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+
+# Next.js generated files
+.next/
+out/
+
+# Build and test artifacts
+build/
+dist/
+coverage/
+
+# Vercel
+.vercel/
+
+# Generated TypeScript files
+next-env.d.ts
+*.tsbuildinfo
+
+# Environment and certificate files
+.env*
+*.pem
+
+# OS files
+.DS_Store
