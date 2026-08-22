@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const hostGrotesk = localFont({
+  src: [
+    {
+      path: "./fonts/HostGrotesk-400.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "./fonts/HostGrotesk-500.woff2",
+      weight: "500",
+      style: "normal",
+    },
+  ],
+  variable: "--font-host-grotesk",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -19,10 +26,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${hostGrotesk.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
