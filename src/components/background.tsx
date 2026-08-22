@@ -6,10 +6,8 @@ import * as THREE from "three";
 
 const VERTEX_SHADER = `
 precision highp float;
-varying vec2 vUv;
 
 void main() {
-  vUv = uv;
   vec4 modelPosition = modelMatrix * vec4(position, 1.0);
   vec4 viewPosition = viewMatrix * modelPosition;
   gl_Position = projectionMatrix * viewPosition;
@@ -151,8 +149,8 @@ void main() {
 
   float field = pattern(uv);
 
-  float edgeFade = smoothstep(0.0, 0.3, rawUv.y)
-    * smoothstep(1.0, 0.95, rawUv.y);
+  float edgeFade = smoothstep(0.0, 0.24, rawUv.y)
+    * (1.0 - smoothstep(0.76, 1.0, rawUv.y));
   field *= edgeFade;
 
   vec3 color = applyDither(nebulaPalette(field));
@@ -310,19 +308,29 @@ function seededValue(seed: number) {
   return value - Math.floor(value);
 }
 
-const STARFIELD_STARS: Star[] = Array.from({ length: 192 }, (_, index) => {
+const STARFIELD_STARS: Star[] = Array.from({ length: 360 }, (_, index) => {
   const sizeSeed = seededValue(index + 3.1);
   const brightness = seededValue(index + 19.7);
-  const isBright = brightness > 0.86;
-  const size = sizeSeed > 0.95 ? 2 : 1;
+  const verticalSeed = seededValue(index + 73.9);
+  const edgeSeed = seededValue(index + 86.1);
+  const isTopSky = verticalSeed < 0.3;
+  const isBottomSky = verticalSeed > 0.7;
+  const isExposedSky = isTopSky || isBottomSky;
+  const y = isTopSky
+    ? 3 + edgeSeed * 25
+    : isBottomSky
+      ? 72 + edgeSeed * 25
+      : 8 + verticalSeed * 84;
+  const isBright = brightness > (isExposedSky ? 0.72 : 0.78);
+  const size = sizeSeed > (isExposedSky ? 0.84 : 0.88) ? 2 : 1;
 
   return {
     x: seededValue(index + 41.3) * 100,
-    y: 40.5 + seededValue(index + 73.9) * 58.5,
+    y,
     size,
     opacity: isBright
-      ? 0.72 + seededValue(index + 101.2) * 0.2
-      : 0.28 + brightness * 0.28,
+      ? (isExposedSky ? 0.88 : 0.84) + seededValue(index + 101.2) * 0.14
+      : (isExposedSky ? 0.54 : 0.46) + brightness * 0.3,
     bright: isBright,
     glow: isBright && size === 2,
   };
@@ -330,13 +338,12 @@ const STARFIELD_STARS: Star[] = Array.from({ length: 192 }, (_, index) => {
 
 const StarField = memo(function StarField() {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute inset-x-0 top-[40vh] bottom-0 bg-[#0A0C0D]" />
+    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
       {STARFIELD_STARS.map((star, index) => (
         <span
           key={index}
           className={`absolute block ${
-            star.bright ? "bg-[#b9d5ff]" : "bg-[#5f8fd8]"
+            star.bright ? "bg-[#dce9ff]" : "bg-[#8bb6ff]"
           }${star.glow ? "shadow-[0_0_5px_#b9d5ff]" : ""}`}
           style={{
             height: `${star.size}px`,
@@ -357,6 +364,10 @@ const CANVAS_STYLE = {
   height: "100%",
   display: "block",
   background: "transparent",
+  maskImage:
+    "linear-gradient(to bottom, transparent 0%, black 18%, black 78%, transparent 100%)",
+  WebkitMaskImage:
+    "linear-gradient(to bottom, transparent 0%, black 18%, black 78%, transparent 100%)",
 };
 const CAMERA = { position: [0, 0, 6] as const };
 
@@ -365,8 +376,7 @@ export default function Background() {
 
   return (
     <div className="relative h-full w-full" aria-hidden="true">
-      <StarField />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[40vh]">
+      <div className="pointer-events-none absolute inset-0">
         <Canvas
           dpr={1}
           frameloop={disableAnimation ? "demand" : "always"}
@@ -377,6 +387,7 @@ export default function Background() {
           <WaveLayer disableAnimation={disableAnimation} />
         </Canvas>
       </div>
+      <StarField />
     </div>
   );
 }
