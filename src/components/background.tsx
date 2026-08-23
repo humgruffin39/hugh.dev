@@ -283,11 +283,24 @@ function WaveLayer({ disableAnimation }: { disableAnimation: boolean }) {
   );
 }
 
+const MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+function getMotionPreference() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return (
+    window.matchMedia(MOTION_QUERY).matches ||
+    document.visibilityState !== "visible"
+  );
+}
+
 function useMotionPreference() {
-  const [disableAnimation, setDisableAnimation] = useState(false);
+  const [disableAnimation, setDisableAnimation] = useState(getMotionPreference);
 
   useEffect(() => {
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const motionQuery = window.matchMedia(MOTION_QUERY);
     const updateMotion = () => {
       setDisableAnimation(
         motionQuery.matches || document.visibilityState !== "visible",
