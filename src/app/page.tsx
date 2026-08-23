@@ -1,7 +1,7 @@
 import TextLink from "@/components/text-link";
 
 const SITE_LINKS = [
-  { href: "/crafts", label: "/Crafts", newTab: false },
+  { href: "/crafts", label: "Crafts", newTab: false },
   { href: "mailto:me@hugh.dev", label: "Email", newTab: true },
   { href: "https://x.com/humgruffin39", label: "Twitter", newTab: true },
   {
