@@ -14,7 +14,7 @@ export default function TextLink({
 }: TextLinkProps) {
   return (
     <Link
-      className="group inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
+      className="group inline-flex min-h-9 touch-manipulation items-center text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
       href={href}
       rel={newTab ? "noopener noreferrer" : undefined}
       target={newTab ? "_blank" : undefined}
