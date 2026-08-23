@@ -15,9 +15,9 @@ export default function Home() {
   return (
     <section
       aria-labelledby="intro-title"
-      className="relative z-10 w-full max-w-md px-8 py-12 sm:px-12 sm:py-16"
+      className="relative z-10 w-full max-w-md px-0 py-12 sm:px-12 sm:py-16"
     >
-      <div className="mx-auto w-full max-w-[38ch] space-y-3">
+      <div className="mx-auto w-full max-w-none space-y-3 sm:max-w-[38ch]">
         <h1
           id="intro-title"
           className="font-signifier text-[28px] text-balance text-[#ededed]"
