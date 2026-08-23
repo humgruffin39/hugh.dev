@@ -14,7 +14,7 @@ export default function TextLink({
 }: TextLinkProps) {
   return (
     <Link
-      className="group text-[#ededed] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#ededed]"
+      className="group text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
       href={href}
       rel={newTab ? "noopener noreferrer" : undefined}
       target={newTab ? "_blank" : undefined}
@@ -25,7 +25,7 @@ export default function TextLink({
       {newTab ? (
         <svg
           aria-hidden="true"
-          className="ml-0.5 inline-block size-3 translate-y-0.5 text-[#ededed]/95"
+          className="ml-0.5 inline-block size-3 translate-y-0.5 text-foreground/95"
           fill="none"
           focusable="false"
           viewBox="0 0 24 24"

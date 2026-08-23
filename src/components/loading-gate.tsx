@@ -20,7 +20,7 @@ function LoadingGateContent({ children }: LoadingGateProps) {
   const { isReady } = useBackgroundReady();
 
   return (
-    <main className="relative flex h-[100dvh] min-h-0 items-center justify-center overflow-hidden bg-[#050608] px-6 py-16 sm:px-8">
+    <main className="relative flex h-[100dvh] min-h-0 items-center justify-center overflow-hidden bg-background px-6 py-16 sm:px-8">
       <div className="absolute inset-0">
         <Background />
       </div>

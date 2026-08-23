@@ -17,17 +17,17 @@ export default function Home() {
       aria-labelledby="intro-title"
       className="relative z-10 w-full max-w-md px-0 py-12 sm:px-12 sm:py-16"
     >
-      <div className="mx-auto w-full max-w-none space-y-3 sm:max-w-[38ch]">
+      <div className="mx-auto w-full space-y-3 sm:max-w-[38ch]">
         <h1
           id="intro-title"
-          className="font-signifier text-[28px] text-balance text-[#ededed]"
+          className="font-signifier text-[28px] text-balance"
         >
           Hugh Fabre
         </h1>
-        <p className="font-sans text-sm leading-snug text-[#ededed]/80">
+        <p className="text-sm leading-snug text-foreground/80">
           Web Engineer / Designer
         </p>
-        <p className="font-sans text-sm leading-relaxed text-[#ededed]/95">
+        <p className="text-sm leading-relaxed text-foreground/95">
           I care about the details, from how an interface feels to the code and
           infrastructure behind it. <br />I like making things that feel good to
           use and hold up well under the hood. <br />
@@ -35,7 +35,7 @@ export default function Home() {
         </p>
         <nav
           aria-label="Links"
-          className="flex justify-start gap-4 font-sans text-sm leading-snug font-medium"
+          className="flex justify-start gap-4 text-sm leading-snug font-medium"
         >
           {SITE_LINKS.map(({ href, label, newTab }) => (
             <TextLink key={href} href={href} newTab={newTab}>
