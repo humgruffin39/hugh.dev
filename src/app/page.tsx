@@ -27,7 +27,7 @@ export default function Home() {
         <p className="font-sans text-sm leading-snug text-[#ededed]/80">
           Web Engineer / Designer
         </p>
-        <p className="font-sans text-sm leading-relaxed text-pretty text-[#ededed]/95">
+        <p className="font-sans text-sm leading-relaxed text-[#ededed]/95">
           I care about the details, from how an interface feels to the code and
           infrastructure behind it. <br />I like making things that feel good to
           use and hold up well under the hood. <br />
