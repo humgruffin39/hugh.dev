@@ -19,3 +19,13 @@ body {
   font-family: var(--font-host-grotesk), sans-serif;
   font-weight: 400;
 }
+
+@keyframes bars-spinner {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.15;
+  }
+}

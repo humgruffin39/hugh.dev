@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import LoadingGate from "@/components/loading-gate";
 import "./globals.css";
 
 const hostGrotesk = localFont({
@@ -36,7 +37,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${hostGrotesk.variable} ${signifier.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <LoadingGate>{children}</LoadingGate>
+      </body>
     </html>
   );
 }

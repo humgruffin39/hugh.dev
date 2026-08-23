@@ -3,6 +3,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { useBackgroundReady } from "@/components/background-ready-context";
 
 const VERTEX_SHADER = `
 precision highp float;
@@ -216,8 +217,14 @@ function updateWaveResolution(
   return true;
 }
 
-function WaveLayer({ disableAnimation }: { disableAnimation: boolean }) {
-  const { viewport, size, gl, invalidate } = useThree();
+function WaveLayer({
+  disableAnimation,
+  onReady,
+}: {
+  disableAnimation: boolean;
+  onReady: () => void;
+}) {
+  const { camera, viewport, size, gl, invalidate, scene } = useThree();
   const uniforms = useMemo(() => createWaveUniforms(), []);
   const uniformsRef = useRef(uniforms);
   const material = useMemo(
@@ -233,6 +240,21 @@ function WaveLayer({ disableAnimation }: { disableAnimation: boolean }) {
   );
 
   useEffect(() => () => material.dispose(), [material]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const markReady = () => {
+      if (!cancelled) {
+        onReady();
+      }
+    };
+
+    void gl.compileAsync(scene, camera).then(markReady, markReady);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [camera, gl, onReady, scene]);
 
   useEffect(() => {
     if (
@@ -399,6 +421,7 @@ const CAMERA = { position: [0, 0, 6] as const };
 
 export default function Background() {
   const disableAnimation = useMotionPreference();
+  const { markReady } = useBackgroundReady();
 
   return (
     <div className="relative h-full w-full" aria-hidden="true">
@@ -410,7 +433,7 @@ export default function Background() {
           camera={CAMERA}
           style={CANVAS_STYLE}
         >
-          <WaveLayer disableAnimation={disableAnimation} />
+          <WaveLayer disableAnimation={disableAnimation} onReady={markReady} />
         </Canvas>
       </div>
       <StarField />
