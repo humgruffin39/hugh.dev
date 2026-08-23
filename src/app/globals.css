@@ -21,9 +21,13 @@ body {
 
 html,
 body {
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
   overscroll-behavior: none;
+}
+
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 @keyframes bars-spinner {

@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
   BackgroundReadyProvider,
@@ -12,15 +13,21 @@ const Background = dynamic(() => import("./background"), {
   ssr: false,
 });
 
+const HOME_MAIN_CLASS_NAME =
+  "relative flex h-[100dvh] min-h-0 items-center justify-center overflow-hidden bg-background px-6 py-16 sm:px-8";
+const SCROLL_MAIN_CLASS_NAME =
+  "relative min-h-[100dvh] bg-background px-6 py-16 sm:px-8";
+
 type LoadingGateProps = {
   children: ReactNode;
 };
 
 function LoadingGateContent({ children }: LoadingGateProps) {
   const { isReady } = useBackgroundReady();
+  const isHome = usePathname() === "/";
 
   return (
-    <main className="relative flex h-[100dvh] min-h-0 items-center justify-center overflow-hidden bg-background px-6 py-16 sm:px-8">
+    <main className={isHome ? HOME_MAIN_CLASS_NAME : SCROLL_MAIN_CLASS_NAME}>
       <div className="absolute inset-0">
         <Background />
       </div>
