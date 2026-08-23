@@ -100,13 +100,16 @@ float pattern(vec2 position) {
   return fbm(position + fbm(position - time * waveSpeed));
 }
 
-vec3 nebulaPalette(float field) {
+vec3 nebulaPalette(float field, float whiteProtection) {
   float energy = clamp(field * 1.35, 0.0, 1.0);
   vec3 color = vec3(0.008, 0.012, 0.04);
   color = mix(color, vec3(0.025, 0.11, 0.3), smoothstep(0.05, 0.3, energy));
   color = mix(color, waveColor, smoothstep(0.2, 0.55, energy) * 0.68);
-  color = mix(color, vec3(0.2, 0.48, 0.86), smoothstep(0.42, 0.78, energy) * 0.68);
-  color = mix(color, vec3(0.62, 0.78, 1.0), smoothstep(0.72, 1.0, energy) * 0.58);
+  float blueHighlight = smoothstep(0.42, 0.78, energy) * 0.68;
+  color = mix(color, vec3(0.2, 0.48, 0.86), blueHighlight);
+  float whiteHighlight = smoothstep(0.72, 1.0, energy) * 0.58;
+  whiteHighlight *= 1.0 - whiteProtection;
+  color = mix(color, vec3(0.62, 0.78, 1.0), whiteHighlight);
   return color;
 }
 
@@ -153,7 +156,17 @@ void main() {
     * (1.0 - smoothstep(0.76, 1.0, rawUv.y));
   field *= edgeFade;
 
-  vec3 color = applyDither(nebulaPalette(field));
+  float lowerText = smoothstep(0.04, 0.18, rawUv.y - 0.506);
+  float textCenterX = 0.5;
+  float textRadiusX = clamp(0.22, 240.0 / resolution.x, 0.42);
+  float textRadiusY = mix(0.42, 0.38, lowerText);
+  vec2 textZone = (rawUv - vec2(textCenterX, 0.506)) / vec2(textRadiusX, textRadiusY);
+  float protectionNoise = cnoise(
+    rawUv * 3.0 + vec2(time * 0.003, -time * 0.002)
+  );
+  float protectionDistance = length(textZone) + protectionNoise * 0.08;
+  float whiteProtection = 1.0 - smoothstep(0.0, 1.8, protectionDistance);
+  vec3 color = applyDither(nebulaPalette(field, whiteProtection));
   float luminance = dot(color, vec3(0.299, 0.587, 0.114));
   float alpha = smoothstep(0.0, 0.05, luminance);
 
