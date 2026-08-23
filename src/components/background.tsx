@@ -249,7 +249,19 @@ function WaveLayer({
       }
     };
 
-    void gl.compileAsync(scene, camera).then(markReady, markReady);
+    const hasParallelShaderCompile = Boolean(
+      gl.getContext().getExtension("KHR_parallel_shader_compile"),
+    );
+    const compile = Promise.resolve().then(() => {
+      if (hasParallelShaderCompile) {
+        return gl.compileAsync(scene, camera);
+      }
+
+      gl.compile(scene, camera);
+      return scene;
+    });
+
+    void compile.then(markReady, markReady);
 
     return () => {
       cancelled = true;
