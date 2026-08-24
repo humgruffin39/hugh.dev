@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useCallback, useState, type ReactNode } from "react";
 import RouteContentTransition from "@/components/route-content-transition";
-import Spinner from "@/components/spinner";
 
 const Background = dynamic(() => import("./background"), {
   ssr: false,
@@ -35,11 +34,7 @@ export default function LoadingGate({ children }: LoadingGateProps) {
         </RouteContentTransition>
       ) : null}
       {!isReady ? (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black">
-          <div aria-label="Loading" role="status">
-            <Spinner />
-          </div>
-        </div>
+        <div aria-hidden="true" className="fixed inset-0 z-20 bg-black" />
       ) : null}
     </main>
   );
