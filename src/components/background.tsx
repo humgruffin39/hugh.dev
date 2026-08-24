@@ -1,9 +1,13 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useBackgroundReady } from "@/components/background-ready-context";
+import {
+  BACKGROUND_ROUTE_INTENT_EVENT,
+  type BackgroundRouteIntentDetail,
+} from "@/components/background-route-intent";
 
 const VERTEX_SHADER = `
 precision highp float;
@@ -396,7 +400,7 @@ function WaveLayer({
         ((currentClockTime - transition.startTime) * 1000) /
         transition.duration;
       const progress = THREE.MathUtils.clamp(elapsed, 0, 1);
-      const eased = progress * progress * (3 - 2 * progress);
+      const eased = progress * (2 - progress);
       const visibility = THREE.MathUtils.lerp(
         transition.startVisibility,
         transition.targetVisibility,
@@ -562,19 +566,54 @@ const CAMERA = { position: [0, 0, 6] as const };
 export default function Background({ isHome }: { isHome: boolean }) {
   const disableAnimation = useMotionPreference();
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [settledRoute, setSettledRoute] = useState(isHome);
-  const routeChanged = settledRoute !== isHome;
+  const [targetIsHome, setTargetIsHome] = useState(isHome);
+  const [isSettledHidden, setIsSettledHidden] = useState(!isHome);
+  const targetIsHomeRef = useRef(isHome);
   const { markReady } = useBackgroundReady();
 
-  useEffect(() => {
-    if (!routeChanged) {
+  const startRouteTransition = useCallback((nextIsHome: boolean) => {
+    if (targetIsHomeRef.current === nextIsHome) {
       return;
     }
 
-    const timer = window.setTimeout(() => setSettledRoute(isHome), 0);
+    targetIsHomeRef.current = nextIsHome;
+    setIsSettledHidden(false);
+    setTargetIsHome(nextIsHome);
+  }, []);
 
-    return () => window.clearTimeout(timer);
-  }, [isHome, routeChanged]);
+  useEffect(() => {
+    startRouteTransition(isHome);
+  }, [isHome, startRouteTransition]);
+
+  useEffect(() => {
+    const handleRouteIntent = (event: Event) => {
+      const routeEvent = event as CustomEvent<BackgroundRouteIntentDetail>;
+      startRouteTransition(routeEvent.detail.isHome);
+    };
+    const handlePopState = () => {
+      startRouteTransition(window.location.pathname === "/");
+    };
+
+    window.addEventListener(BACKGROUND_ROUTE_INTENT_EVENT, handleRouteIntent);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener(
+        BACKGROUND_ROUTE_INTENT_EVENT,
+        handleRouteIntent,
+      );
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [startRouteTransition]);
+
+  const handleTransitionChange = useCallback((active: boolean) => {
+    setIsTransitioning(active);
+    if (active) {
+      setIsSettledHidden(false);
+    } else if (!targetIsHomeRef.current) {
+      setIsSettledHidden(true);
+    }
+  }, []);
 
   return (
     <div className="relative h-full w-full" aria-hidden="true">
@@ -582,7 +621,7 @@ export default function Background({ isHome }: { isHome: boolean }) {
         <Canvas
           dpr={1}
           frameloop={
-            isTransitioning || routeChanged || (!disableAnimation && isHome)
+            isTransitioning || (!isSettledHidden && !disableAnimation)
               ? "always"
               : "demand"
           }
@@ -592,9 +631,9 @@ export default function Background({ isHome }: { isHome: boolean }) {
         >
           <WaveLayer
             disableAnimation={disableAnimation}
-            isHome={isHome}
+            isHome={targetIsHome}
             onReady={markReady}
-            onTransitionChange={setIsTransitioning}
+            onTransitionChange={handleTransitionChange}
           />
         </Canvas>
       </div>

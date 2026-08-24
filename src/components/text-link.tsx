@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { requestBackgroundRoute } from "@/components/background-route-intent";
 
 type TextLinkProps = {
   children: ReactNode;
@@ -12,10 +15,30 @@ export default function TextLink({
   href,
   newTab = false,
 }: TextLinkProps) {
+  const handleNavigationIntent = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (
+      newTab ||
+      !href.startsWith("/") ||
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    requestBackgroundRoute(
+      new URL(href, window.location.href).pathname === "/",
+    );
+  };
+
   return (
     <Link
       className="group inline-flex min-h-9 touch-manipulation items-center text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
       href={href}
+      onClick={handleNavigationIntent}
       rel={newTab ? "noopener noreferrer" : undefined}
       target={newTab ? "_blank" : undefined}
     >
