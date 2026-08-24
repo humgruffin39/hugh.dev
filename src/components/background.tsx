@@ -269,12 +269,13 @@ function WaveLayer({
   isHome: boolean;
 }) {
   const { camera, clock, viewport, size, gl, invalidate, scene } = useThree();
-  const [uniforms] = useState(() => createWaveUniforms(isHome ? 1 : 0));
+  const [uniforms] = useState(() => createWaveUniforms(0));
+  const [isShaderReady, setIsShaderReady] = useState(false);
   const uniformsRef = useRef(uniforms);
-  const visibilityRef = useRef(isHome ? 1 : 0);
+  const visibilityRef = useRef(0);
   const transitionRef = useRef<NebulaTransition | null>(null);
   const transitionIndex = useRef(0);
-  const routeRef = useRef(isHome);
+  const routeRef = useRef(false);
   const waveScaleRef = useRef(1);
   const waveTimeRef = useRef(0);
   const lastClockTimeRef = useRef(0);
@@ -296,6 +297,7 @@ function WaveLayer({
     let cancelled = false;
     const markReady = () => {
       if (!cancelled) {
+        setIsShaderReady(true);
         onReady();
       }
     };
@@ -359,7 +361,7 @@ function WaveLayer({
   }, [clock, disableAnimation]);
 
   useEffect(() => {
-    if (routeRef.current === isHome) {
+    if (!isShaderReady || routeRef.current === isHome) {
       return;
     }
 
@@ -386,7 +388,14 @@ function WaveLayer({
     uniformsRef.current.transitionSeed.value = isHome ? -seed : seed;
     onTransitionChange(true);
     invalidate();
-  }, [clock, disableAnimation, invalidate, isHome, onTransitionChange]);
+  }, [
+    clock,
+    disableAnimation,
+    invalidate,
+    isHome,
+    isShaderReady,
+    onTransitionChange,
+  ]);
 
   useFrame(() => {
     const currentClockTime = clock.getElapsedTime();

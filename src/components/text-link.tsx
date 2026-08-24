@@ -29,9 +29,7 @@ export default function TextLink({
       return;
     }
 
-    requestBackgroundRoute(
-      new URL(href, window.location.href).pathname === "/",
-    );
+    requestBackgroundRoute(new URL(href, window.location.href).pathname);
   };
 
   return (

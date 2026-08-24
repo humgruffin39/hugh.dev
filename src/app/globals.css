@@ -30,6 +30,50 @@ body {
   overflow-y: auto;
 }
 
+.route-content-layer {
+  z-index: 10;
+}
+
+.route-content-enter {
+  transition: opacity 1200ms ease-in;
+  will-change: opacity;
+}
+
+.route-content-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.route-content-exit {
+  animation: route-content-fade-out 1000ms ease-out both;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+.route-content-hidden {
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-content-enter {
+    transition-duration: 150ms;
+  }
+
+  .route-content-exit {
+    animation-duration: 150ms;
+  }
+}
+
+@keyframes route-content-fade-out {
+  from {
+    opacity: var(--route-content-start-opacity, 1);
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes bars-spinner {
   from {
     opacity: 1;
