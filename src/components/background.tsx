@@ -1,25 +1,23 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import * as THREE from "three";
-import { useBackgroundReady } from "@/components/background-ready-context";
+import { useEffect, useRef } from "react";
 import {
   BACKGROUND_ROUTE_INTENT_EVENT,
   type BackgroundRouteIntentDetail,
 } from "@/components/background-route-intent";
+import StarField from "@/components/star-field";
 
-const VERTEX_SHADER = `
+const VERTEX_SHADER = `#version 300 es
 precision highp float;
 
+in vec2 position;
+
 void main() {
-  vec4 modelPosition = modelMatrix * vec4(position, 1.0);
-  vec4 viewPosition = viewMatrix * modelPosition;
-  gl_Position = projectionMatrix * viewPosition;
+  gl_Position = vec4(position, 0.0, 1.0);
 }
 `;
 
-const FRAGMENT_SHADER = `
+const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
 uniform vec2 resolution;
@@ -32,6 +30,8 @@ uniform float colorNum;
 uniform float pixelSize;
 uniform float nebulaVisibility;
 uniform float transitionSeed;
+
+out vec4 fragmentColor;
 
 vec4 mod289(vec4 value) {
   return value - floor(value * (1.0 / 289.0)) * 289.0;
@@ -151,7 +151,7 @@ vec3 applyDither(vec3 color) {
 }
 
 void main() {
-  vec2 pixelCoord = floor(gl_FragCoord.xy / pixelSize) * pixelSize;
+  vec2 pixelCoord = floor(gl_FragCoord.xy / pixelSize) * pixelSize * 2.0;
   vec2 rawUv = pixelCoord / resolution.xy;
   vec2 uv = rawUv;
   uv -= 0.5;
@@ -200,308 +200,57 @@ void main() {
   float luminance = dot(color, vec3(0.299, 0.587, 0.114));
   float alpha = smoothstep(0.0, 0.05, luminance);
 
-  gl_FragColor = vec4(color, alpha);
+  fragmentColor = vec4(color, alpha);
 }
 `;
 
 const WAVE_CONFIG = {
   colorNum: 4.3,
-  pixelSize: 2,
+  pixelSize: 1,
   waveAmplitude: 0.44,
   waveColor: [0.32, 0.55, 0.95] as const,
   waveFrequency: 2.3,
   waveSpeed: 0.03,
 };
 
-function createWaveUniforms(initialVisibility: number) {
-  return {
-    time: new THREE.Uniform(0),
-    resolution: new THREE.Uniform(new THREE.Vector2()),
-    waveSpeed: new THREE.Uniform(WAVE_CONFIG.waveSpeed),
-    waveFrequency: new THREE.Uniform(WAVE_CONFIG.waveFrequency),
-    waveAmplitude: new THREE.Uniform(WAVE_CONFIG.waveAmplitude),
-    waveColor: new THREE.Uniform(new THREE.Color(...WAVE_CONFIG.waveColor)),
-    colorNum: new THREE.Uniform(WAVE_CONFIG.colorNum),
-    pixelSize: new THREE.Uniform(WAVE_CONFIG.pixelSize),
-    nebulaVisibility: new THREE.Uniform(initialVisibility),
-    transitionSeed: new THREE.Uniform(0),
-  };
-}
-
-type WaveUniforms = ReturnType<typeof createWaveUniforms>;
-
-function updateWaveResolution(
-  uniforms: WaveUniforms,
-  width: number,
-  height: number,
-  pixelRatio: number,
-) {
-  const resolution = uniforms.resolution.value;
-  const nextWidth = Math.floor(width * pixelRatio);
-  const nextHeight = Math.floor(height * pixelRatio);
-
-  if (resolution.x === nextWidth && resolution.y === nextHeight) {
-    return false;
-  }
-
-  resolution.set(nextWidth, nextHeight);
-  return true;
-}
-
 type NebulaTransition = {
   duration: number;
+  seed: number;
   startScale: number;
   startTime: number;
   startVisibility: number;
   targetVisibility: number;
-  seed: number;
 };
 
-function WaveLayer({
-  isHome,
-  disableAnimation,
-  onReady,
-  onTransitionChange,
-}: {
-  disableAnimation: boolean;
-  onReady: () => void;
-  onTransitionChange: (active: boolean) => void;
-  isHome: boolean;
-}) {
-  const { camera, clock, viewport, size, gl, invalidate, scene } = useThree();
-  const [uniforms] = useState(() => createWaveUniforms(0));
-  const [isShaderReady, setIsShaderReady] = useState(false);
-  const uniformsRef = useRef(uniforms);
-  const visibilityRef = useRef(0);
-  const transitionRef = useRef<NebulaTransition | null>(null);
-  const transitionIndex = useRef(0);
-  const routeRef = useRef(false);
-  const waveScaleRef = useRef(1);
-  const waveTimeRef = useRef(0);
-  const lastClockTimeRef = useRef(0);
-  const material = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        vertexShader: VERTEX_SHADER,
-        fragmentShader: FRAGMENT_SHADER,
-        transparent: true,
-        depthWrite: false,
-        uniforms,
-      }),
-    [uniforms],
-  );
-
-  useEffect(() => () => material.dispose(), [material]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const markReady = () => {
-      if (!cancelled) {
-        setIsShaderReady(true);
-        onReady();
-      }
-    };
-
-    const hasParallelShaderCompile = Boolean(
-      gl.getContext().getExtension("KHR_parallel_shader_compile"),
-    );
-    const compile = Promise.resolve().then(() => {
-      if (hasParallelShaderCompile) {
-        return gl.compileAsync(scene, camera);
-      }
-
-      gl.compile(scene, camera);
-      return scene;
-    });
-
-    void compile.then(markReady, markReady);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [camera, gl, onReady, scene]);
-
-  useEffect(() => {
-    if (
-      updateWaveResolution(
-        uniformsRef.current,
-        size.width,
-        size.height,
-        gl.getPixelRatio(),
-      )
-    ) {
-      invalidate();
-    }
-  }, [gl, invalidate, size.height, size.width, uniforms]);
-
-  useEffect(() => {
-    const canvas = gl.domElement;
-    const preventContextLoss = (event: Event) => event.preventDefault();
-    const restoreContext = () => {
-      updateWaveResolution(
-        uniformsRef.current,
-        size.width,
-        size.height,
-        gl.getPixelRatio(),
-      );
-      invalidate();
-    };
-
-    canvas.addEventListener("webglcontextlost", preventContextLoss);
-    canvas.addEventListener("webglcontextrestored", restoreContext);
-
-    return () => {
-      canvas.removeEventListener("webglcontextlost", preventContextLoss);
-      canvas.removeEventListener("webglcontextrestored", restoreContext);
-    };
-  }, [gl, invalidate, size.height, size.width, uniforms]);
-
-  useEffect(() => {
-    lastClockTimeRef.current = clock.getElapsedTime();
-  }, [clock, disableAnimation]);
-
-  useEffect(() => {
-    if (!isShaderReady || routeRef.current === isHome) {
-      return;
-    }
-
-    routeRef.current = isHome;
-    lastClockTimeRef.current = clock.getElapsedTime();
-    transitionIndex.current += 1;
-    const activeTransition = transitionRef.current;
-    const seed = activeTransition
-      ? Math.abs(activeTransition.seed)
-      : 0.2 +
-        seededValue(
-          clock.getElapsedTime() * 17.3 + transitionIndex.current * 31.7,
-        ) *
-          0.8;
-
-    transitionRef.current = {
-      duration: disableAnimation ? 150 : isHome ? 2800 : 3000,
-      startScale: waveScaleRef.current,
-      startTime: clock.getElapsedTime(),
-      startVisibility: visibilityRef.current,
-      targetVisibility: isHome ? 1 : 0,
-      seed: isHome ? -seed : seed,
-    };
-    uniformsRef.current.transitionSeed.value = isHome ? -seed : seed;
-    onTransitionChange(true);
-    invalidate();
-  }, [
-    clock,
-    disableAnimation,
-    invalidate,
-    isHome,
-    isShaderReady,
-    onTransitionChange,
-  ]);
-
-  useFrame(() => {
-    const currentClockTime = clock.getElapsedTime();
-    const delta = Math.max(0, currentClockTime - lastClockTimeRef.current);
-    lastClockTimeRef.current = currentClockTime;
-    const transition = transitionRef.current;
-    let scale = 1;
-
-    if (transition) {
-      const elapsed =
-        ((currentClockTime - transition.startTime) * 1000) /
-        transition.duration;
-      const progress = THREE.MathUtils.clamp(elapsed, 0, 1);
-      const eased = progress * (2 - progress);
-      const visibility = THREE.MathUtils.lerp(
-        transition.startVisibility,
-        transition.targetVisibility,
-        eased,
-      );
-      scale = THREE.MathUtils.lerp(
-        transition.startScale,
-        transition.targetVisibility === 0 && !disableAnimation ? 1.32 : 1,
-        eased,
-      );
-      visibilityRef.current = visibility;
-      uniformsRef.current.nebulaVisibility.value = visibility;
-    }
-
-    waveScaleRef.current = scale;
-    if (!disableAnimation) {
-      waveTimeRef.current += delta * scale;
-      uniformsRef.current.time.value = waveTimeRef.current;
-    }
-
-    if (!transition) {
-      return;
-    }
-
-    const progress = THREE.MathUtils.clamp(
-      ((currentClockTime - transition.startTime) * 1000) / transition.duration,
-      0,
-      1,
-    );
-
-    if (progress >= 1) {
-      transitionRef.current = null;
-      visibilityRef.current = transition.targetVisibility;
-      uniformsRef.current.nebulaVisibility.value = transition.targetVisibility;
-      uniformsRef.current.transitionSeed.value = 0;
-      waveScaleRef.current = 1;
-      onTransitionChange(false);
-    }
-  });
-
-  return (
-    <mesh scale={[viewport.width, viewport.height, 1]}>
-      <planeGeometry args={[1, 1]} />
-      <primitive object={material} attach="material" />
-    </mesh>
-  );
-}
-
 const MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+const FRAME_INTERVAL = 1000 / 60;
+const FULLSCREEN_TRIANGLE = new Float32Array([-1, -1, 3, -1, -1, 3]);
 
-function getMotionPreference() {
-  if (typeof window === "undefined") {
-    return false;
-  }
+type NebulaUniforms = {
+  nebulaVisibility: WebGLUniformLocation;
+  resolution: WebGLUniformLocation;
+  time: WebGLUniformLocation;
+  transitionSeed: WebGLUniformLocation;
+};
 
-  return (
-    window.matchMedia(MOTION_QUERY).matches ||
-    document.visibilityState !== "visible"
-  );
-}
+type NebulaRenderer = {
+  buffer: WebGLBuffer;
+  gl: WebGL2RenderingContext;
+  program: WebGLProgram;
+  uniforms: NebulaUniforms;
+};
 
-function useMotionPreference() {
-  const [disableAnimation, setDisableAnimation] = useState(getMotionPreference);
-
-  useEffect(() => {
-    const motionQuery = window.matchMedia(MOTION_QUERY);
-    const updateMotion = () => {
-      setDisableAnimation(
-        motionQuery.matches || document.visibilityState !== "visible",
-      );
-    };
-
-    updateMotion();
-    motionQuery.addEventListener("change", updateMotion);
-    document.addEventListener("visibilitychange", updateMotion);
-
-    return () => {
-      motionQuery.removeEventListener("change", updateMotion);
-      document.removeEventListener("visibilitychange", updateMotion);
-    };
-  }, []);
-
-  return disableAnimation;
-}
-
-type Star = {
-  x: number;
-  y: number;
-  size: number;
-  opacity: number;
-  bright: boolean;
-  glow: boolean;
+type NebulaAnimation = {
+  currentRouteIsHome: boolean;
+  disabled: boolean;
+  lastTime: number;
+  nextDrawTime: number;
+  targetIsHome: boolean;
+  transition: NebulaTransition | null;
+  transitionIndex: number;
+  visibility: number;
+  waveScale: number;
+  waveTime: number;
 };
 
 function seededValue(seed: number) {
@@ -509,92 +258,352 @@ function seededValue(seed: number) {
   return value - Math.floor(value);
 }
 
-const STARFIELD_STARS: Star[] = Array.from({ length: 360 }, (_, index) => {
-  const sizeSeed = seededValue(index + 3.1);
-  const brightness = seededValue(index + 19.7);
-  const verticalSeed = seededValue(index + 73.9);
-  const edgeSeed = seededValue(index + 86.1);
-  const isTopSky = verticalSeed < 0.3;
-  const isBottomSky = verticalSeed > 0.7;
-  const isExposedSky = isTopSky || isBottomSky;
-  const y = isTopSky
-    ? 3 + edgeSeed * 25
-    : isBottomSky
-      ? 72 + edgeSeed * 25
-      : 8 + verticalSeed * 84;
-  const isBright = brightness > (isExposedSky ? 0.72 : 0.78);
-  const size = sizeSeed > (isExposedSky ? 0.84 : 0.88) ? 2 : 1;
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function lerp(start: number, end: number, progress: number) {
+  return start + (end - start) * progress;
+}
+
+function createShader(
+  gl: WebGL2RenderingContext,
+  type: number,
+  source: string,
+) {
+  const shader = gl.createShader(type);
+  if (!shader) {
+    throw new Error("Unable to create nebula shader");
+  }
+
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  return shader;
+}
+
+function assertShaderCompiled(gl: WebGL2RenderingContext, shader: WebGLShader) {
+  if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    return;
+  }
+
+  throw new Error(gl.getShaderInfoLog(shader) ?? "Unable to compile shader");
+}
+
+function getUniformLocation(
+  gl: WebGL2RenderingContext,
+  program: WebGLProgram,
+  name: string,
+) {
+  const location = gl.getUniformLocation(program, name);
+  if (!location) {
+    throw new Error(`Unable to find nebula uniform: ${name}`);
+  }
+  return location;
+}
+
+function createNebulaRenderer(canvas: HTMLCanvasElement) {
+  const gl = canvas.getContext("webgl2", {
+    alpha: true,
+    antialias: false,
+    powerPreference: "high-performance",
+    premultipliedAlpha: true,
+  });
+  if (!gl) {
+    throw new Error("WebGL2 is unavailable");
+  }
+
+  const vertexShader = createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
+  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+  const program = gl.createProgram();
+  if (!program) {
+    throw new Error("Unable to create nebula program");
+  }
+
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  assertShaderCompiled(gl, vertexShader);
+  assertShaderCompiled(gl, fragmentShader);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(program) ?? "Unable to link shaders");
+  }
+
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+  gl.useProgram(program);
+
+  const buffer = gl.createBuffer();
+  if (!buffer) {
+    throw new Error("Unable to create nebula geometry");
+  }
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, FULLSCREEN_TRIANGLE, gl.STATIC_DRAW);
+  const position = gl.getAttribLocation(program, "position");
+  gl.enableVertexAttribArray(position);
+  gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.clearColor(0, 0, 0, 0);
+
+  gl.uniform1f(
+    getUniformLocation(gl, program, "waveSpeed"),
+    WAVE_CONFIG.waveSpeed,
+  );
+  gl.uniform1f(
+    getUniformLocation(gl, program, "waveFrequency"),
+    WAVE_CONFIG.waveFrequency,
+  );
+  gl.uniform1f(
+    getUniformLocation(gl, program, "waveAmplitude"),
+    WAVE_CONFIG.waveAmplitude,
+  );
+  gl.uniform3f(
+    getUniformLocation(gl, program, "waveColor"),
+    ...WAVE_CONFIG.waveColor,
+  );
+  gl.uniform1f(
+    getUniformLocation(gl, program, "colorNum"),
+    WAVE_CONFIG.colorNum,
+  );
+  gl.uniform1f(
+    getUniformLocation(gl, program, "pixelSize"),
+    WAVE_CONFIG.pixelSize,
+  );
 
   return {
-    x: seededValue(index + 41.3) * 100,
-    y,
-    size,
-    opacity: isBright
-      ? (isExposedSky ? 0.88 : 0.84) + seededValue(index + 101.2) * 0.14
-      : (isExposedSky ? 0.54 : 0.46) + brightness * 0.3,
-    bright: isBright,
-    glow: isBright && size === 2,
-  };
-});
+    buffer,
+    gl,
+    program,
+    uniforms: {
+      nebulaVisibility: getUniformLocation(gl, program, "nebulaVisibility"),
+      resolution: getUniformLocation(gl, program, "resolution"),
+      time: getUniformLocation(gl, program, "time"),
+      transitionSeed: getUniformLocation(gl, program, "transitionSeed"),
+    },
+  } satisfies NebulaRenderer;
+}
 
-const StarField = memo(function StarField() {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
-      {STARFIELD_STARS.map((star, index) => (
-        <span
-          key={index}
-          className={`absolute block ${
-            star.bright ? "bg-[#dce9ff]" : "bg-[#8bb6ff]"
-          }${star.glow ? "shadow-[0_0_5px_#b9d5ff]" : ""}`}
-          style={{
-            height: `${star.size}px`,
-            left: `${star.x.toFixed(4)}%`,
-            opacity: star.opacity.toFixed(6),
-            top: `${star.y.toFixed(4)}%`,
-            width: `${star.size}px`,
-          }}
-        />
-      ))}
-    </div>
+function resizeRenderer(renderer: NebulaRenderer, canvas: HTMLCanvasElement) {
+  const displayWidth = Math.max(1, Math.round(canvas.clientWidth));
+  const displayHeight = Math.max(1, Math.round(canvas.clientHeight));
+  const renderWidth = Math.max(1, Math.ceil(displayWidth / 2));
+  const renderHeight = Math.max(1, Math.ceil(displayHeight / 2));
+
+  if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
+    canvas.width = renderWidth;
+    canvas.height = renderHeight;
+  }
+
+  renderer.gl.viewport(0, 0, renderWidth, renderHeight);
+  renderer.gl.useProgram(renderer.program);
+  renderer.gl.uniform2f(
+    renderer.uniforms.resolution,
+    displayWidth,
+    displayHeight,
   );
-});
+}
 
-const CANVAS_GL = { antialias: true, alpha: true };
-const CANVAS_STYLE = {
-  width: "100%",
-  height: "100%",
-  display: "block",
-  background: "transparent",
-  maskImage:
-    "linear-gradient(to bottom, transparent 0%, black 18%, black 78%, transparent 100%)",
-  WebkitMaskImage:
-    "linear-gradient(to bottom, transparent 0%, black 18%, black 78%, transparent 100%)",
+function drawNebula(renderer: NebulaRenderer, animation: NebulaAnimation) {
+  const { gl, uniforms } = renderer;
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.useProgram(renderer.program);
+  gl.uniform1f(uniforms.time, animation.waveTime);
+  gl.uniform1f(uniforms.nebulaVisibility, animation.visibility);
+  gl.uniform1f(uniforms.transitionSeed, animation.transition?.seed ?? 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+type BackgroundProps = {
+  isHome: boolean;
+  onReady: () => void;
 };
-const CAMERA = { position: [0, 0, 6] as const };
 
-export default function Background({ isHome }: { isHome: boolean }) {
-  const disableAnimation = useMotionPreference();
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [targetIsHome, setTargetIsHome] = useState(isHome);
-  const [isSettledHidden, setIsSettledHidden] = useState(!isHome);
-  const targetIsHomeRef = useRef(isHome);
-  const { markReady } = useBackgroundReady();
+export default function Background({ isHome, onReady }: BackgroundProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const initialIsHomeRef = useRef(isHome);
+  const requestTargetRef = useRef<(nextIsHome: boolean) => void>(() => {});
 
-  const startRouteTransition = useCallback((nextIsHome: boolean) => {
-    if (targetIsHomeRef.current === nextIsHome) {
+  useEffect(() => {
+    requestTargetRef.current(isHome);
+  }, [isHome]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
       return;
     }
 
-    targetIsHomeRef.current = nextIsHome;
-    setIsSettledHidden(false);
-    setTargetIsHome(nextIsHome);
-  }, []);
+    const motionQuery = window.matchMedia(MOTION_QUERY);
+    const animation: NebulaAnimation = {
+      currentRouteIsHome: false,
+      disabled: motionQuery.matches || document.visibilityState !== "visible",
+      lastTime: 0,
+      nextDrawTime: 0,
+      targetIsHome: initialIsHomeRef.current,
+      transition: null,
+      transitionIndex: 0,
+      visibility: 0,
+      waveScale: 1,
+      waveTime: 0,
+    };
+    let renderer: NebulaRenderer | null = null;
+    let frameId: number | null = null;
+    let disposed = false;
+    let didMarkReady = false;
 
-  useEffect(() => {
-    startRouteTransition(isHome);
-  }, [isHome, startRouteTransition]);
+    const scheduleFrame = () => {
+      if (frameId === null && document.visibilityState === "visible") {
+        frameId = requestAnimationFrame(renderFrame);
+      }
+    };
 
-  useEffect(() => {
+    const startRouteTransition = (nextIsHome: boolean) => {
+      animation.targetIsHome = nextIsHome;
+      if (!renderer || animation.currentRouteIsHome === nextIsHome) {
+        return;
+      }
+
+      animation.currentRouteIsHome = nextIsHome;
+      animation.transitionIndex += 1;
+      const now = performance.now();
+      const activeTransition = animation.transition;
+      const seed = activeTransition
+        ? Math.abs(activeTransition.seed)
+        : 0.2 +
+          seededValue((now / 1000) * 17.3 + animation.transitionIndex * 31.7) *
+            0.8;
+
+      animation.transition = {
+        duration: animation.disabled ? 150 : nextIsHome ? 2800 : 3000,
+        seed: nextIsHome ? -seed : seed,
+        startScale: animation.waveScale,
+        startTime: now,
+        startVisibility: animation.visibility,
+        targetVisibility: nextIsHome ? 1 : 0,
+      };
+      animation.lastTime = now;
+      animation.nextDrawTime = now;
+      scheduleFrame();
+    };
+
+    const updateMotionPreference = () => {
+      animation.disabled =
+        motionQuery.matches || document.visibilityState !== "visible";
+      animation.lastTime = performance.now();
+      animation.nextDrawTime = animation.lastTime;
+
+      if (document.visibilityState !== "visible") {
+        if (frameId !== null) {
+          cancelAnimationFrame(frameId);
+          frameId = null;
+        }
+        return;
+      }
+
+      scheduleFrame();
+    };
+
+    function renderFrame(now: number) {
+      frameId = null;
+      if (!renderer || disposed) {
+        return;
+      }
+
+      if (now < animation.nextDrawTime) {
+        scheduleFrame();
+        return;
+      }
+
+      animation.nextDrawTime = Math.max(
+        animation.nextDrawTime + FRAME_INTERVAL,
+        now,
+      );
+
+      const delta = animation.lastTime
+        ? Math.max(0, (now - animation.lastTime) / 1000)
+        : 0;
+      animation.lastTime = now;
+      const transition = animation.transition;
+      let scale = 1;
+
+      if (transition) {
+        const progress = clamp(
+          (now - transition.startTime) / transition.duration,
+          0,
+          1,
+        );
+        const eased = progress * (2 - progress);
+        animation.visibility = lerp(
+          transition.startVisibility,
+          transition.targetVisibility,
+          eased,
+        );
+        scale = lerp(
+          transition.startScale,
+          transition.targetVisibility === 0 && !animation.disabled ? 1.32 : 1,
+          eased,
+        );
+
+        if (progress >= 1) {
+          animation.visibility = transition.targetVisibility;
+          animation.transition = null;
+          scale = 1;
+        }
+      }
+
+      animation.waveScale = scale;
+      if (!animation.disabled) {
+        animation.waveTime += delta * scale;
+      }
+
+      drawNebula(renderer, animation);
+
+      if (
+        animation.transition ||
+        (!animation.disabled && animation.currentRouteIsHome)
+      ) {
+        scheduleFrame();
+      }
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (renderer) {
+        resizeRenderer(renderer, canvas);
+        scheduleFrame();
+      }
+    });
+
+    const initializeRenderer = () => {
+      try {
+        const nextRenderer = createNebulaRenderer(canvas);
+        if (disposed) {
+          nextRenderer.gl.deleteBuffer(nextRenderer.buffer);
+          nextRenderer.gl.deleteProgram(nextRenderer.program);
+          return;
+        }
+
+        renderer = nextRenderer;
+        resizeRenderer(renderer, canvas);
+        animation.lastTime = performance.now();
+        startRouteTransition(animation.targetIsHome);
+        scheduleFrame();
+
+        if (!didMarkReady) {
+          didMarkReady = true;
+          onReady();
+        }
+      } catch (error) {
+        console.error(error);
+        if (!didMarkReady && !disposed) {
+          didMarkReady = true;
+          onReady();
+        }
+      }
+    };
+
     const handleRouteIntent = (event: Event) => {
       const routeEvent = event as CustomEvent<BackgroundRouteIntentDetail>;
       startRouteTransition(routeEvent.detail.isHome);
@@ -602,50 +611,58 @@ export default function Background({ isHome }: { isHome: boolean }) {
     const handlePopState = () => {
       startRouteTransition(window.location.pathname === "/");
     };
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      renderer = null;
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+    };
+    const handleContextRestored = () => {
+      initializeRenderer();
+    };
 
+    requestTargetRef.current = startRouteTransition;
+    resizeObserver.observe(canvas);
+    motionQuery.addEventListener("change", updateMotionPreference);
+    document.addEventListener("visibilitychange", updateMotionPreference);
     window.addEventListener(BACKGROUND_ROUTE_INTENT_EVENT, handleRouteIntent);
     window.addEventListener("popstate", handlePopState);
+    canvas.addEventListener("webglcontextlost", handleContextLost);
+    canvas.addEventListener("webglcontextrestored", handleContextRestored);
+    initializeRenderer();
 
     return () => {
+      disposed = true;
+      requestTargetRef.current = () => {};
+      resizeObserver.disconnect();
+      motionQuery.removeEventListener("change", updateMotionPreference);
+      document.removeEventListener("visibilitychange", updateMotionPreference);
       window.removeEventListener(
         BACKGROUND_ROUTE_INTENT_EVENT,
         handleRouteIntent,
       );
       window.removeEventListener("popstate", handlePopState);
-    };
-  }, [startRouteTransition]);
+      canvas.removeEventListener("webglcontextlost", handleContextLost);
+      canvas.removeEventListener("webglcontextrestored", handleContextRestored);
 
-  const handleTransitionChange = useCallback((active: boolean) => {
-    setIsTransitioning(active);
-    if (active) {
-      setIsSettledHidden(false);
-    } else if (!targetIsHomeRef.current) {
-      setIsSettledHidden(true);
-    }
-  }, []);
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      if (renderer) {
+        renderer.gl.deleteBuffer(renderer.buffer);
+        renderer.gl.deleteProgram(renderer.program);
+      }
+    };
+  }, [onReady]);
 
   return (
-    <div className="relative h-full w-full" aria-hidden="true">
-      <div className="pointer-events-none absolute inset-0">
-        <Canvas
-          dpr={1}
-          frameloop={
-            isTransitioning || (!isSettledHidden && !disableAnimation)
-              ? "always"
-              : "demand"
-          }
-          gl={CANVAS_GL}
-          camera={CAMERA}
-          style={CANVAS_STYLE}
-        >
-          <WaveLayer
-            disableAnimation={disableAnimation}
-            isHome={targetIsHome}
-            onReady={markReady}
-            onTransitionChange={handleTransitionChange}
-          />
-        </Canvas>
-      </div>
+    <div className="relative size-full" aria-hidden="true">
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none absolute inset-0 block size-full bg-transparent [mask-image:linear-gradient(to_bottom,transparent_0%,black_18%,black_78%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,black_18%,black_78%,transparent_100%)] [image-rendering:pixelated]"
+      />
       <StarField />
     </div>
   );

@@ -2,11 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
-import {
-  BackgroundReadyProvider,
-  useBackgroundReady,
-} from "@/components/background-ready-context";
+import { useCallback, useState, type ReactNode } from "react";
 import RouteContentTransition from "@/components/route-content-transition";
 import Spinner from "@/components/spinner";
 
@@ -18,15 +14,16 @@ type LoadingGateProps = {
   children: ReactNode;
 };
 
-function LoadingGateContent({ children }: LoadingGateProps) {
-  const { isReady } = useBackgroundReady();
+export default function LoadingGate({ children }: LoadingGateProps) {
+  const [isReady, setIsReady] = useState(false);
   const pathname = usePathname();
   const isHome = pathname === "/";
+  const markReady = useCallback(() => setIsReady(true), []);
 
   return (
     <main className="relative grid min-h-[100dvh] overflow-x-hidden bg-background">
       <div className="absolute inset-0">
-        <Background isHome={isHome} />
+        <Background isHome={isHome} onReady={markReady} />
       </div>
       <div
         aria-hidden="true"
@@ -45,13 +42,5 @@ function LoadingGateContent({ children }: LoadingGateProps) {
         </div>
       ) : null}
     </main>
-  );
-}
-
-export default function LoadingGate({ children }: LoadingGateProps) {
-  return (
-    <BackgroundReadyProvider>
-      <LoadingGateContent>{children}</LoadingGateContent>
-    </BackgroundReadyProvider>
   );
 }
