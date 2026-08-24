@@ -20,22 +20,31 @@ export default function Home() {
       <div className="mx-auto w-full space-y-3 sm:max-w-[38ch]">
         <h1
           id="intro-title"
-          className="font-signifier text-[28px] text-balance"
+          className="home-stagger-item font-signifier text-[28px] text-balance [--home-stagger-index:0]"
         >
           Hugh Fabre
         </h1>
-        <p className="text-sm leading-snug text-foreground/80">
+        <p className="home-stagger-item text-sm leading-snug text-foreground/80 [--home-stagger-index:1]">
           Web Engineer / Designer
         </p>
-        <p className="text-sm leading-relaxed text-foreground/95">
-          I care about the details, from how an interface feels to the code and
-          infrastructure behind it. <br />I like making things that feel good to
-          use and hold up well under the hood. <br />
-          If you’ve got something interesting in mind, I’m always keen to chat.
-        </p>
+        <div className="text-sm leading-relaxed text-foreground/95">
+          <p className="home-stagger-item [--home-stagger-index:2]">
+            I care about the details, from how an interface feels to the code
+            and infrastructure behind it.
+          </p>
+          <p className="home-stagger-item [--home-stagger-index:3]">
+            I like making things that feel good to use and hold up well under
+            the hood.
+          </p>
+          <p className="home-stagger-item [--home-stagger-index:4]">
+            If you’ve got something interesting in mind, I’m always keen to
+            chat.
+          </p>
+        </div>
         <nav
           aria-label="Links"
-          className="flex justify-start gap-4 text-sm leading-snug font-medium"
+          className="home-stagger-item flex justify-start gap-4 text-sm leading-snug font-medium [--home-stagger-index:5]"
+          data-home-stagger-end="true"
         >
           {SITE_LINKS.map(({ href, label, newTab }) => (
             <TextLink key={href} href={href} newTab={newTab}>

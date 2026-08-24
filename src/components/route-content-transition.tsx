@@ -30,7 +30,9 @@ type ContentSnapshot = {
 };
 
 function getLayoutClassName(pathname: string) {
-  return pathname === "/" ? HOME_CONTENT_CLASS_NAME : SCROLL_CONTENT_CLASS_NAME;
+  return pathname === "/"
+    ? `route-content-home ${HOME_CONTENT_CLASS_NAME}`
+    : SCROLL_CONTENT_CLASS_NAME;
 }
 
 function createSnapshotHtml(element: HTMLDivElement) {
@@ -133,10 +135,14 @@ export default function RouteContentTransition({
   const handleContentTransitionEnd = (
     event: TransitionEvent<HTMLDivElement>,
   ) => {
+    const target = event.target as HTMLElement;
+    const completedHomeStagger = target.dataset.homeStaggerEnd === "true";
+    const completedLayerFade = event.target === event.currentTarget;
+
     if (
-      event.target === event.currentTarget &&
       event.propertyName === "opacity" &&
-      contentStatus === "entering"
+      contentStatus === "entering" &&
+      (completedLayerFade || completedHomeStagger)
     ) {
       setContentStatus("idle");
     }

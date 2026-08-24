@@ -39,6 +39,28 @@ body {
   will-change: opacity;
 }
 
+.home-stagger-item {
+  opacity: 1;
+}
+
+.route-content-home.route-content-hidden {
+  opacity: 1;
+}
+
+.route-content-home.route-content-enter {
+  transition: none;
+}
+
+.route-content-home.route-content-hidden .home-stagger-item {
+  opacity: 0;
+}
+
+.route-content-home.route-content-enter .home-stagger-item {
+  transition: opacity 1200ms ease-in;
+  transition-delay: calc(var(--home-stagger-index) * 60ms);
+  will-change: opacity;
+}
+
 .route-content-hidden {
   opacity: 0;
   pointer-events: none;
@@ -56,6 +78,11 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .route-content-enter {
+    transition-duration: 150ms;
+  }
+
+  .route-content-home.route-content-enter .home-stagger-item {
+    transition-delay: 0ms;
     transition-duration: 150ms;
   }
 
