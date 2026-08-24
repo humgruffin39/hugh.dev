@@ -44,9 +44,11 @@ function createSnapshotHtml(element: HTMLDivElement) {
 
 export default function RouteContentTransition({
   children,
+  homeEntryStartTime,
   pathname,
 }: {
   children: ReactNode;
+  homeEntryStartTime: number | null;
   pathname: string;
 }) {
   const [contentStatus, setContentStatus] = useState<ContentStatus>(
@@ -55,20 +57,8 @@ export default function RouteContentTransition({
   const [snapshot, setSnapshot] = useState<ContentSnapshot | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const currentPathnameRef = useRef(pathname);
-  const initialEntryPathnameRef = useRef(pathname);
+  const handledHomeEntryRef = useRef(homeEntryStartTime);
   const snapshotIdRef = useRef(0);
-
-  useEffect(() => {
-    if (initialEntryPathnameRef.current !== "/") {
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      setContentStatus("entering");
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
 
   const beginTransition = useCallback((targetPathname: string) => {
     if (currentPathnameRef.current === targetPathname) {
@@ -116,12 +106,29 @@ export default function RouteContentTransition({
 
     currentPathnameRef.current = pathname;
     setContentStatus("hidden");
+    if (pathname === "/") {
+      return;
+    }
+
     const frame = window.requestAnimationFrame(() => {
       setContentStatus("entering");
     });
 
     return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
+
+  useLayoutEffect(() => {
+    if (
+      pathname !== "/" ||
+      homeEntryStartTime === null ||
+      handledHomeEntryRef.current === homeEntryStartTime
+    ) {
+      return;
+    }
+
+    handledHomeEntryRef.current = homeEntryStartTime;
+    setContentStatus("entering");
+  }, [homeEntryStartTime, pathname]);
 
   const handleContentTransitionEnd = (
     event: TransitionEvent<HTMLDivElement>,

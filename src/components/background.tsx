@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   BACKGROUND_ROUTE_INTENT_EVENT,
   type BackgroundRouteIntentDetail,
@@ -258,6 +258,8 @@ function seededValue(seed: number) {
   return value - Math.floor(value);
 }
 
+const HOME_ENTRY_SEED = 0.2 + seededValue(31.7) * 0.8;
+
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
 }
@@ -417,18 +419,32 @@ function drawNebula(renderer: NebulaRenderer, animation: NebulaAnimation) {
 }
 
 type BackgroundProps = {
+  homeEntryStartTime: number | null;
   isHome: boolean;
   onReady: () => void;
 };
 
-export default function Background({ isHome, onReady }: BackgroundProps) {
+export default function Background({
+  homeEntryStartTime,
+  isHome,
+  onReady,
+}: BackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const initialIsHomeRef = useRef(isHome);
   const requestTargetRef = useRef<(nextIsHome: boolean) => void>(() => {});
+  const requestHomeEntryRef = useRef<(startTime: number) => void>(() => {});
 
   useEffect(() => {
-    requestTargetRef.current(isHome);
+    if (!isHome) {
+      requestTargetRef.current(false);
+    }
   }, [isHome]);
+
+  useLayoutEffect(() => {
+    if (homeEntryStartTime !== null) {
+      requestHomeEntryRef.current(homeEntryStartTime);
+    }
+  }, [homeEntryStartTime]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -460,7 +476,11 @@ export default function Background({ isHome, onReady }: BackgroundProps) {
       }
     };
 
-    const startRouteTransition = (nextIsHome: boolean) => {
+    const startRouteTransition = (
+      nextIsHome: boolean,
+      startTime = performance.now(),
+      synchronizeHomeEntry = false,
+    ) => {
       animation.targetIsHome = nextIsHome;
       if (!renderer || animation.currentRouteIsHome === nextIsHome) {
         return;
@@ -468,24 +488,38 @@ export default function Background({ isHome, onReady }: BackgroundProps) {
 
       animation.currentRouteIsHome = nextIsHome;
       animation.transitionIndex += 1;
-      const now = performance.now();
       const activeTransition = animation.transition;
-      const seed = activeTransition
-        ? Math.abs(activeTransition.seed)
-        : 0.2 +
-          seededValue((now / 1000) * 17.3 + animation.transitionIndex * 31.7) *
-            0.8;
+      const canResetHomeEntry =
+        synchronizeHomeEntry &&
+        activeTransition === null &&
+        animation.visibility <= 0.001;
+
+      if (canResetHomeEntry) {
+        animation.visibility = 0;
+        animation.waveScale = 1;
+        animation.waveTime = 0;
+      }
+
+      const seed = canResetHomeEntry
+        ? HOME_ENTRY_SEED
+        : activeTransition
+          ? Math.abs(activeTransition.seed)
+          : 0.2 +
+            seededValue(
+              (startTime / 1000) * 17.3 + animation.transitionIndex * 31.7,
+            ) *
+              0.8;
 
       animation.transition = {
         duration: animation.disabled ? 150 : nextIsHome ? 2800 : 3000,
         seed: nextIsHome ? -seed : seed,
         startScale: animation.waveScale,
-        startTime: now,
+        startTime,
         startVisibility: animation.visibility,
         targetVisibility: nextIsHome ? 1 : 0,
       };
-      animation.lastTime = now;
-      animation.nextDrawTime = now;
+      animation.lastTime = startTime;
+      animation.nextDrawTime = startTime;
       scheduleFrame();
     };
 
@@ -588,7 +622,6 @@ export default function Background({ isHome, onReady }: BackgroundProps) {
         renderer = nextRenderer;
         resizeRenderer(renderer, canvas);
         animation.lastTime = performance.now();
-        startRouteTransition(animation.targetIsHome);
         scheduleFrame();
 
         if (!didMarkReady) {
@@ -606,10 +639,14 @@ export default function Background({ isHome, onReady }: BackgroundProps) {
 
     const handleRouteIntent = (event: Event) => {
       const routeEvent = event as CustomEvent<BackgroundRouteIntentDetail>;
-      startRouteTransition(routeEvent.detail.isHome);
+      if (!routeEvent.detail.isHome) {
+        startRouteTransition(false);
+      }
     };
     const handlePopState = () => {
-      startRouteTransition(window.location.pathname === "/");
+      if (window.location.pathname !== "/") {
+        startRouteTransition(false);
+      }
     };
     const handleContextLost = (event: Event) => {
       event.preventDefault();
@@ -624,6 +661,8 @@ export default function Background({ isHome, onReady }: BackgroundProps) {
     };
 
     requestTargetRef.current = startRouteTransition;
+    requestHomeEntryRef.current = (startTime) =>
+      startRouteTransition(true, startTime, true);
     resizeObserver.observe(canvas);
     motionQuery.addEventListener("change", updateMotionPreference);
     document.addEventListener("visibilitychange", updateMotionPreference);
@@ -636,6 +675,7 @@ export default function Background({ isHome, onReady }: BackgroundProps) {
     return () => {
       disposed = true;
       requestTargetRef.current = () => {};
+      requestHomeEntryRef.current = () => {};
       resizeObserver.disconnect();
       motionQuery.removeEventListener("change", updateMotionPreference);
       document.removeEventListener("visibilitychange", updateMotionPreference);
