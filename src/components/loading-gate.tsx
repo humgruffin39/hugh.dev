@@ -18,17 +18,23 @@ export default function LoadingGate({ children }: LoadingGateProps) {
   const [homeEntryStartTime, setHomeEntryStartTime] = useState<number | null>(
     null,
   );
+  const [hasStartedHomeEntry, setHasStartedHomeEntry] = useState(false);
   const pathname = usePathname();
   const isHome = pathname === "/";
   const markReady = useCallback(() => setIsReady(true), []);
 
   useEffect(() => {
-    if (!isReady || !isHome) {
+    if (!isReady) {
       return;
     }
 
     const frame = requestAnimationFrame(() => {
-      setHomeEntryStartTime(performance.now());
+      if (isHome) {
+        setHomeEntryStartTime(performance.now());
+        setHasStartedHomeEntry(true);
+      } else {
+        setHomeEntryStartTime(null);
+      }
     });
 
     return () => cancelAnimationFrame(frame);
@@ -55,7 +61,8 @@ export default function LoadingGate({ children }: LoadingGateProps) {
           {children}
         </RouteContentTransition>
       ) : null}
-      {!isReady || (isHome && homeEntryStartTime === null) ? (
+      {!isReady ||
+      (isHome && !hasStartedHomeEntry && homeEntryStartTime === null) ? (
         <div aria-hidden="true" className="fixed inset-0 z-20 bg-black" />
       ) : null}
     </main>

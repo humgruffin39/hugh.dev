@@ -9,7 +9,6 @@ import {
   type AnimationEvent,
   type CSSProperties,
   type ReactNode,
-  type TransitionEvent,
 } from "react";
 import {
   BACKGROUND_ROUTE_INTENT_EVENT,
@@ -37,6 +36,19 @@ function getLayoutClassName(pathname: string) {
 
 function createSnapshotHtml(element: HTMLDivElement) {
   const snapshot = element.cloneNode(true) as HTMLDivElement;
+  const sourceStaggerItems =
+    element.querySelectorAll<HTMLElement>(".home-stagger-item");
+  const snapshotStaggerItems =
+    snapshot.querySelectorAll<HTMLElement>(".home-stagger-item");
+
+  sourceStaggerItems.forEach((sourceItem, index) => {
+    const snapshotItem = snapshotStaggerItems[index];
+    if (snapshotItem) {
+      const computedStyle = getComputedStyle(sourceItem);
+      snapshotItem.style.opacity = computedStyle.opacity;
+    }
+  });
+
   snapshot.removeAttribute("id");
   snapshot
     .querySelectorAll("[id]")
@@ -61,12 +73,17 @@ export default function RouteContentTransition({
   const currentPathnameRef = useRef(pathname);
   const handledHomeEntryRef = useRef(homeEntryStartTime);
   const snapshotIdRef = useRef(0);
+  const pendingTargetRef = useRef<string | null>(null);
 
   const beginTransition = useCallback((targetPathname: string) => {
-    if (currentPathnameRef.current === targetPathname) {
+    if (
+      currentPathnameRef.current === targetPathname ||
+      pendingTargetRef.current === targetPathname
+    ) {
       return;
     }
 
+    pendingTargetRef.current = targetPathname;
     snapshotIdRef.current += 1;
     const content = contentRef.current;
 
@@ -90,14 +107,14 @@ export default function RouteContentTransition({
     const handlePopState = () => beginTransition(window.location.pathname);
 
     window.addEventListener(BACKGROUND_ROUTE_INTENT_EVENT, handleRouteIntent);
-    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("popstate", handlePopState, { capture: true });
 
     return () => {
       window.removeEventListener(
         BACKGROUND_ROUTE_INTENT_EVENT,
         handleRouteIntent,
       );
-      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("popstate", handlePopState, { capture: true });
     };
   }, [beginTransition]);
 
@@ -107,6 +124,7 @@ export default function RouteContentTransition({
     }
 
     currentPathnameRef.current = pathname;
+    pendingTargetRef.current = null;
     setContentStatus("hidden");
     if (pathname === "/") {
       return;
@@ -132,18 +150,15 @@ export default function RouteContentTransition({
     setContentStatus("entering");
   }, [homeEntryStartTime, pathname]);
 
-  const handleContentTransitionEnd = (
-    event: TransitionEvent<HTMLDivElement>,
-  ) => {
+  const handleContentAnimationEnd = (event: AnimationEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     const completedHomeStagger = target.dataset.homeStaggerEnd === "true";
     const completedLayerFade = event.target === event.currentTarget;
 
-    if (
-      event.propertyName === "opacity" &&
-      contentStatus === "entering" &&
-      (completedLayerFade || completedHomeStagger)
-    ) {
+    const completedEntry =
+      pathname === "/" ? completedHomeStagger : completedLayerFade;
+
+    if (contentStatus === "entering" && completedEntry) {
       setContentStatus("idle");
     }
   };
@@ -181,7 +196,7 @@ export default function RouteContentTransition({
       <div
         ref={contentRef}
         className={`route-content-layer relative col-start-1 row-start-1 ${getLayoutClassName(pathname)} ${contentStatus === "hidden" ? "route-content-hidden" : ""} ${contentStatus === "entering" ? "route-content-enter" : ""}`}
-        onTransitionEnd={handleContentTransitionEnd}
+        onAnimationEnd={handleContentAnimationEnd}
       >
         {children}
       </div>
