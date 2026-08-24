@@ -29,7 +29,7 @@ function LoadingGateContent({ children }: LoadingGateProps) {
   return (
     <main className={isHome ? HOME_MAIN_CLASS_NAME : SCROLL_MAIN_CLASS_NAME}>
       <div className="absolute inset-0">
-        <Background />
+        <Background isHome={isHome} />
       </div>
       <div
         aria-hidden="true"

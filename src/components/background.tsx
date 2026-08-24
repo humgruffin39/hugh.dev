@@ -26,6 +26,8 @@ uniform float waveAmplitude;
 uniform vec3 waveColor;
 uniform float colorNum;
 uniform float pixelSize;
+uniform float nebulaVisibility;
+uniform float transitionSeed;
 
 vec4 mod289(vec4 value) {
   return value - floor(value * (1.0 / 289.0)) * 289.0;
@@ -157,6 +159,29 @@ void main() {
     * (1.0 - smoothstep(0.76, 1.0, rawUv.y));
   field *= edgeFade;
 
+  if (nebulaVisibility <= 0.0) {
+    field = 0.0;
+  } else if (transitionSeed != 0.0 && nebulaVisibility < 1.0) {
+    float fixedSeed = abs(transitionSeed);
+    float lowNoise = 0.5 + 0.5 * cnoise(
+      rawUv * 3.6 + vec2(fixedSeed * 17.0, fixedSeed * 29.0)
+    );
+    float midNoise = 0.5 + 0.5 * cnoise(
+      rawUv * 9.0 + vec2(fixedSeed * 23.0, fixedSeed * 37.0)
+    );
+    float fixedNoise = mix(lowNoise, midNoise, 0.38);
+    float extinction = 1.0 - nebulaVisibility;
+    float erosionProgress = pow(
+      smoothstep(0.05, 0.95, extinction),
+      2.0
+    );
+    float localExtinction = extinction + (fixedNoise - 0.5) * 0.24;
+    float localReveal = 1.0 - smoothstep(0.1, 1.0, localExtinction);
+    field *= localReveal;
+    field *= mix(1.0, 0.5, erosionProgress);
+    field *= smoothstep(0.0, 0.18, nebulaVisibility);
+  }
+
   float lowerText = smoothstep(0.04, 0.18, rawUv.y - 0.506);
   float textCenterX = 0.5;
   float textRadiusX = clamp(0.22, 240.0 / resolution.x, 0.42);
@@ -184,7 +209,7 @@ const WAVE_CONFIG = {
   waveSpeed: 0.03,
 };
 
-function createWaveUniforms() {
+function createWaveUniforms(initialVisibility: number) {
   return {
     time: new THREE.Uniform(0),
     resolution: new THREE.Uniform(new THREE.Vector2()),
@@ -194,6 +219,8 @@ function createWaveUniforms() {
     waveColor: new THREE.Uniform(new THREE.Color(...WAVE_CONFIG.waveColor)),
     colorNum: new THREE.Uniform(WAVE_CONFIG.colorNum),
     pixelSize: new THREE.Uniform(WAVE_CONFIG.pixelSize),
+    nebulaVisibility: new THREE.Uniform(initialVisibility),
+    transitionSeed: new THREE.Uniform(0),
   };
 }
 
@@ -217,16 +244,36 @@ function updateWaveResolution(
   return true;
 }
 
+type NebulaTransition = {
+  duration: number;
+  startScale: number;
+  startTime: number;
+  startVisibility: number;
+  targetVisibility: number;
+  seed: number;
+};
+
 function WaveLayer({
+  isHome,
   disableAnimation,
   onReady,
+  onTransitionChange,
 }: {
   disableAnimation: boolean;
   onReady: () => void;
+  onTransitionChange: (active: boolean) => void;
+  isHome: boolean;
 }) {
-  const { camera, viewport, size, gl, invalidate, scene } = useThree();
-  const uniforms = useMemo(() => createWaveUniforms(), []);
+  const { camera, clock, viewport, size, gl, invalidate, scene } = useThree();
+  const [uniforms] = useState(() => createWaveUniforms(isHome ? 1 : 0));
   const uniformsRef = useRef(uniforms);
+  const visibilityRef = useRef(isHome ? 1 : 0);
+  const transitionRef = useRef<NebulaTransition | null>(null);
+  const transitionIndex = useRef(0);
+  const routeRef = useRef(isHome);
+  const waveScaleRef = useRef(1);
+  const waveTimeRef = useRef(0);
+  const lastClockTimeRef = useRef(0);
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -303,9 +350,90 @@ function WaveLayer({
     };
   }, [gl, invalidate, size.height, size.width, uniforms]);
 
-  useFrame(({ clock }) => {
+  useEffect(() => {
+    lastClockTimeRef.current = clock.getElapsedTime();
+  }, [clock, disableAnimation]);
+
+  useEffect(() => {
+    if (routeRef.current === isHome) {
+      return;
+    }
+
+    routeRef.current = isHome;
+    lastClockTimeRef.current = clock.getElapsedTime();
+    transitionIndex.current += 1;
+    const activeTransition = transitionRef.current;
+    const seed = activeTransition
+      ? Math.abs(activeTransition.seed)
+      : 0.2 +
+        seededValue(
+          clock.getElapsedTime() * 17.3 + transitionIndex.current * 31.7,
+        ) *
+          0.8;
+
+    transitionRef.current = {
+      duration: disableAnimation ? 150 : isHome ? 2800 : 3000,
+      startScale: waveScaleRef.current,
+      startTime: clock.getElapsedTime(),
+      startVisibility: visibilityRef.current,
+      targetVisibility: isHome ? 1 : 0,
+      seed: isHome ? -seed : seed,
+    };
+    uniformsRef.current.transitionSeed.value = isHome ? -seed : seed;
+    onTransitionChange(true);
+    invalidate();
+  }, [clock, disableAnimation, invalidate, isHome, onTransitionChange]);
+
+  useFrame(() => {
+    const currentClockTime = clock.getElapsedTime();
+    const delta = Math.max(0, currentClockTime - lastClockTimeRef.current);
+    lastClockTimeRef.current = currentClockTime;
+    const transition = transitionRef.current;
+    let scale = 1;
+
+    if (transition) {
+      const elapsed =
+        ((currentClockTime - transition.startTime) * 1000) /
+        transition.duration;
+      const progress = THREE.MathUtils.clamp(elapsed, 0, 1);
+      const eased = progress * progress * (3 - 2 * progress);
+      const visibility = THREE.MathUtils.lerp(
+        transition.startVisibility,
+        transition.targetVisibility,
+        eased,
+      );
+      scale = THREE.MathUtils.lerp(
+        transition.startScale,
+        transition.targetVisibility === 0 && !disableAnimation ? 1.32 : 1,
+        eased,
+      );
+      visibilityRef.current = visibility;
+      uniformsRef.current.nebulaVisibility.value = visibility;
+    }
+
+    waveScaleRef.current = scale;
     if (!disableAnimation) {
-      uniformsRef.current.time.value = clock.getElapsedTime();
+      waveTimeRef.current += delta * scale;
+      uniformsRef.current.time.value = waveTimeRef.current;
+    }
+
+    if (!transition) {
+      return;
+    }
+
+    const progress = THREE.MathUtils.clamp(
+      ((currentClockTime - transition.startTime) * 1000) / transition.duration,
+      0,
+      1,
+    );
+
+    if (progress >= 1) {
+      transitionRef.current = null;
+      visibilityRef.current = transition.targetVisibility;
+      uniformsRef.current.nebulaVisibility.value = transition.targetVisibility;
+      uniformsRef.current.transitionSeed.value = 0;
+      waveScaleRef.current = 1;
+      onTransitionChange(false);
     }
   });
 
@@ -431,21 +559,43 @@ const CANVAS_STYLE = {
 };
 const CAMERA = { position: [0, 0, 6] as const };
 
-export default function Background() {
+export default function Background({ isHome }: { isHome: boolean }) {
   const disableAnimation = useMotionPreference();
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [settledRoute, setSettledRoute] = useState(isHome);
+  const routeChanged = settledRoute !== isHome;
   const { markReady } = useBackgroundReady();
+
+  useEffect(() => {
+    if (!routeChanged) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setSettledRoute(isHome), 0);
+
+    return () => window.clearTimeout(timer);
+  }, [isHome, routeChanged]);
 
   return (
     <div className="relative h-full w-full" aria-hidden="true">
       <div className="pointer-events-none absolute inset-0">
         <Canvas
           dpr={1}
-          frameloop={disableAnimation ? "demand" : "always"}
+          frameloop={
+            isTransitioning || routeChanged || (!disableAnimation && isHome)
+              ? "always"
+              : "demand"
+          }
           gl={CANVAS_GL}
           camera={CAMERA}
           style={CANVAS_STYLE}
         >
-          <WaveLayer disableAnimation={disableAnimation} onReady={markReady} />
+          <WaveLayer
+            disableAnimation={disableAnimation}
+            isHome={isHome}
+            onReady={markReady}
+            onTransitionChange={setIsTransitioning}
+          />
         </Canvas>
       </div>
       <StarField />
