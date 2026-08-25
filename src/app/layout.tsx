@@ -5,26 +5,28 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import LoadingGate from "@/components/loading-gate";
 import "./globals.css";
 
-const hostGrotesk = localFont({
+const soehne = localFont({
   src: [
     {
-      path: "./fonts/HostGrotesk-400.woff2",
+      path: "./fonts/Soehne-400.woff2",
       weight: "400",
       style: "normal",
     },
     {
-      path: "./fonts/HostGrotesk-500.woff2",
+      path: "./fonts/Soehne-500.woff2",
       weight: "500",
       style: "normal",
     },
   ],
-  variable: "--font-host-grotesk",
+  variable: "--font-soehne",
   display: "swap",
 });
 
-const signifier = localFont({
-  src: "./fonts/Signifier-400.woff2",
-  variable: "--font-signifier-display",
+const newsreader = localFont({
+  src: "./fonts/Newsreader-400.woff2",
+  weight: "400",
+  style: "normal",
+  variable: "--font-newsreader",
   display: "swap",
 });
 
@@ -37,7 +39,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${hostGrotesk.variable} ${signifier.variable} h-full antialiased`}
+      className={`${soehne.variable} ${newsreader.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-sans">
         <LoadingGate>{children}</LoadingGate>

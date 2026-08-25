@@ -9,8 +9,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-host-grotesk);
-  --font-signifier: var(--font-signifier-display);
+  --font-sans: var(--font-soehne);
+  --font-serif: var(--font-newsreader);
 }
 
 body {
